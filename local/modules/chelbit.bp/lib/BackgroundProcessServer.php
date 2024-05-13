@@ -9,46 +9,27 @@ use Bitrix\Main\SystemException;
 class BackgroundProcessServer extends BackgroundProcessBase
 {
     private string $saveMode = "auto";
-    private ?int $id;
-    private int $timer = 0;
+    private ?string $pidKey;
 
     /**
      * @throws SystemException
      */
-    public function __construct(int $id)
+    public function __construct(string $pidKey)
     {
-        $this->timer = time();
-        $this->setConnection();
-        if(!$this->loadData($id)){
-            $this->db->close();
-            throw new SystemException("Ошибка получения данных объекта из таблицы");
+        if(!$this->getData($pidKey)){
+            throw new SystemException("Ошибка получения данных по процессу");
         }
-        $this->id = $id;
-        $this->db->close();
+        $this->pidKey = $pidKey;
     }
     /**
-     * Сохранение состояние объекта в таблицу sqlite
-     * @throws SystemException В случае ошибки сохранения данных в таблице
+     * Сохранение состояние объекта в файл
      */
     public function save() : void
     {
-        $timerDiff = time()-$this->timer;
-        if($timerDiff >= 5 || $this->data["STATUS"]=="COMPLETED" || $this->data["STATUS"]=="ERROR"){
-            $this->timer = time();
-            $this->saveCounter = 0;
-            $this->setConnection();
-            $this->data["UPDATE_DATE"] = date($this->dateFormat);
-            $sql = "UPDATE bp SET STATUS='".$this->data["STATUS"]."', END_DATE='".$this->data["END_DATE"]."', ";
-            $sql .= "UPDATE_DATE='".$this->data["UPDATE_DATE"]."', TOTAL_ITEMS=".(int)$this->data["TOTAL_ITEMS"].", ";
-            $sql .= "PROCESSED_ITEMS=".(int)$this->data["PROCESSED_ITEMS"].", STATUS_DESCRIPTION='".$this->data["STATUS_DESCRIPTION"]."', ";
-            $sql .= "WARNING='".$this->data["WARNING"]."', USED_MEMORY='".$this->getUsedMemory()."', ";
-            $sql .= "ALLOCATED_MEMORY='".$this->getUsedMemory(true)."' WHERE ID=".$this->id.";";
-            if(!$this->db->exec($sql)){
-                $this->db->close();
-                throw new SystemException("Ошибка сохранения состояния фонового процесса");
-            }
-            $this->db->close();
-        }
+        $this->data["USED_MEMORY"] = $this->getUsedMemory();
+        $this->data["ALLOCATED_MEMORY"] = $this->getUsedMemory(true);
+        $this->data["UPDATE_DATE"] = date($this->dateFormat);
+        $this->setData($this->pidKey);
     }
 
     /**
@@ -72,7 +53,6 @@ class BackgroundProcessServer extends BackgroundProcessBase
     /**
      * Устанавливает общее количество элементов
      * @params int $totalItems
-     * @throws SystemException
      */
     public function setTotalItems(int $totalItems): void
     {
@@ -85,7 +65,6 @@ class BackgroundProcessServer extends BackgroundProcessBase
     /**
      * Устанавливает количество обработанных элеентов
      * @param int $processedItems
-     * @throws SystemException
      */
     public function setProcessedItems(int $processedItems): void
     {
@@ -99,7 +78,6 @@ class BackgroundProcessServer extends BackgroundProcessBase
      * Устанавливает описание статуса, какое действие сейчас выполняет воновый процесс
      * @param string $status
      * @return void
-     * @throws SystemException
      */
     public function setStatusDescription(string $status): void
     {
@@ -114,7 +92,6 @@ class BackgroundProcessServer extends BackgroundProcessBase
      * @param string $warning
      * @param bool $isJoin Добавить к предыдущему сообщению через пробел
      * @return void
-     * @throws SystemException
      */
     public function setWarning(string $warning, bool $isJoin = false): void
     {
@@ -129,9 +106,8 @@ class BackgroundProcessServer extends BackgroundProcessBase
     }
     /**
      * Устанавливает статус успешного завершения, записывает в поле DATE_END текущее время
-     * Аавтомтаически сохраняет данные в БД без учета режима автосохранения
+     * Аавтомтаически сохраняет данные в файл без учета режима автосохранения
      * Предполагается, что после вызова данного метода с объектом работа окончена
-     * @throws SystemException
      * @return void
      */
     public function setCompletedStatus(): void
@@ -143,10 +119,9 @@ class BackgroundProcessServer extends BackgroundProcessBase
 
     /**
      *  Устанавливает статус неуспешного завершения, записывает в поле DATE_END текущее время
-     *  Аавтомтаически сохраняет данные в БД без учета режима автосохранения
+     *  Аавтомтаически сохраняет данные в файл без учета режима автосохранения
      *  Предполагается, что после вызова данного метода с объектом работа окончена
      * @return void
-     * @throws SystemException
      */
     public function setErrorStatus(): void
     {

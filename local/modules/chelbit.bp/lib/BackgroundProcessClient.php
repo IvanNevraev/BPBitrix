@@ -2,7 +2,6 @@
 namespace ChelBit\BP;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Diag\Debug;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\SystemException;
@@ -15,70 +14,32 @@ class BackgroundProcessClient extends BackgroundProcessBase
 {
     const PHP_BIN_PATH = "/usr/bin/php";
     const SCHEDULER_PATH = "/local/modules/chelbit.bp/tools/scheduler.php";
-    private string $serverRoot = "/home/bitrix/www";
-    private ?string $moduleName;
-    private ?string $methodName;
     private ?string $pidKey;
-    private ?int $id;
     private ?string $memoryLimit;
     public function __construct(string $moduleName, string $methodName, string $pidKey)
     {
         sleep(1);
-        $data = $this->getByPidKey($pidKey);
-        if($data){
-            $this->data = $data;
-            $this->id = (int)$data["ID"];
-        }else{
-            $this->serverRoot = Application::getDocumentRoot();
+        if(!$this->getData($pidKey)){
+            $serverRoot = Application::getDocumentRoot();
             if(!Loader::includeModule($moduleName)){
                 throw new SystemException("Ошибка подключения модуля");
             }
-            $this->moduleName = $moduleName;
-            $this->methodName = $methodName;
-            $this->pidKey = $pidKey;
             $this->data["PID_KEY"] = $pidKey;
-            $this->run();
+            $this->data["STATUS"] = "PROGRESS";
+            $this->data["BEGIN_DATE"] = date($this->dateFormat);
+            $this->setData($pidKey);
+            $cmd = self::PHP_BIN_PATH." -f ".$serverRoot.self::SCHEDULER_PATH." -- '".$moduleName."' '".$methodName."' '".$pidKey."' > /dev/null 2>/dev/null &";
+            exec($cmd);
         }
         $this->memoryLimit = ini_get("memory_limit");
         if($this->memoryLimit == "-1"){
             $this->memoryLimit = "не ограничена";
         }
-    }
-    private function run() : void
-    {
-        $id = $this->createDbItem();
-        $cmd = self::PHP_BIN_PATH." -f ".$this->serverRoot.self::SCHEDULER_PATH." -- '".$this->moduleName."' '".$this->methodName."' '".$id."' > /dev/null 2>/dev/null &";
-        exec($cmd);
-    }
-    private function createDbItem() : int
-    {
-        $this->setConnection();
-        $now = date($this->dateFormat);
-        $sql = "INSERT INTO bp (PID_KEY, STATUS, BEGIN_DATE) VALUES ('".$this->pidKey."', 'PROGRESS', '".$now."')";
-        if($this->db->exec($sql)){
-            $id = $this->db->lastInsertRowID();
-            $this->id = $id;
-            $this->data["ID"] = $id;
-            $this->data["PID_KEY"] = $this->pidKey;
-            $this->data["STATUS"] = "PROGRESS";
-            $this->data["BEGIN_DATE"] = $now;
-            $this->db->close();
-            return $id;
-        }else{
-            throw new SystemException("Ошибка при создании записи в таблице фоновых процессов ".$this->db->lastErrorMsg());
-        }
-    }
-    public function getData(): array
-    {
-        if($this->loadData($this->id)){
-            return $this->data;
-        }else{
-            throw new SystemException("Ошибка получения данных по фоновому процессу");
-        }
+        $this->pidKey = $pidKey;
     }
     public function getDataForDialog(bool $addMemoryData = true, bool $addTimeProgressData = true) : array
     {
-        if($this->loadData($this->id)){
+        if($this->getData($this->pidKey)){
             $return = [];
             $return["STATUS"] = (string)$this->data["STATUS"];
             $return["TOTAL_ITEMS"] = (int)$this->data["TOTAL_ITEMS"];
@@ -105,11 +66,11 @@ class BackgroundProcessClient extends BackgroundProcessBase
      */
     private function getTimeStatus() : string
     {
-        $beginDate = new DateTime($this->data["BEGIN_DATE"], "Y-m-d H-i-s");
+        $beginDate = new DateTime($this->data["BEGIN_DATE"], $this->dateFormat);
         if(strlen($this->data["UPDATE_DATE"]) < 10){
             return "<br> Процесс запущен в ".$beginDate->format("H:i:s");
         }
-        $updateDate = new DateTime($this->data["UPDATE_DATE"], "Y-m-d H-i-s");
+        $updateDate = new DateTime($this->data["UPDATE_DATE"], $this->dateFormat);
         $timeDiff = $updateDate->getTimestamp()-$beginDate->getTimestamp();
         if((int)$this->data["PROCESSED_ITEMS"] == 0){
             $calculatedTime = 0;
@@ -136,23 +97,6 @@ class BackgroundProcessClient extends BackgroundProcessBase
             }
         }else{
             return $sek." секунд";
-        }
-    }
-    private function getByPidKey(string $pidKey) : bool|array
-    {
-        $this->setConnection();
-        $sql = "SELECT * FROM bp WHERE PID_KEY='".$pidKey."';";
-        $res = $this->db->query($sql);
-        if(!$res){
-            $this->db->close();
-            return false;
-        }
-        $data = $res->fetchArray(SQLITE3_ASSOC);
-        $this->db->close();
-        if($data){
-            return $data;
-        }else{
-            return false;
         }
     }
 }
