@@ -1,11 +1,8 @@
 <?php
 declare(strict_types=1);
 
-use Bitrix\Main\Application;
-use Bitrix\Main\Loader;
+
 use Bitrix\Main\ModuleManager;
-use Bitrix\Main\Entity\Base;
-use ChelBit\Base\Constants;
 
 class Chelbit_Bp extends CModule
 {
@@ -25,10 +22,6 @@ class Chelbit_Bp extends CModule
 
     function DoInstall(): bool
     {
-        if(!extension_loaded("sqlite3")){
-            $GLOBALS['APPLICATION']->ThrowException("Для работы модуля необходимо расширение sqlite3");
-            return false;
-        }
         ModuleManager::registerModule($this->MODULE_ID);
         return true;
     }

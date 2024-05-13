@@ -13,10 +13,10 @@ class SchedulerTest
         for($i=0; $i<=self::TOTAL_ITEMS; $i++){
             $data[] = $i;
             $bps->setProcessedItems($i);
-            if($i=1254){
+            if($i==1254){
                 $bps->setWarning("Внимание ошибка при обработке элемента ".$i);
             }
-            //sleep((rand(1,10)/100));
+            sleep((rand(1,10)/100));
         }
         $bps->setStatusDescription("Обработка завершена");
         $bps->setCompletedStatus();
