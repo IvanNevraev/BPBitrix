@@ -1,9 +1,10 @@
 <?php
-
+/**
+ * @var \ChelBit\BP\Data\ExecutingParams $executingParams
+ */
 if (php_sapi_name() !== 'cli') exit('Запуск только из CLI');
 
 use Bitrix\Main\Loader;
-use ChelBit\Main\Agent\SchedulerAgent;
 
 // Определяем DOCUMENT_ROOT для ядра битрикса
 $_SERVER['DOCUMENT_ROOT'] = realpath(dirname(__FILE__) . '/../../../..');
@@ -28,13 +29,13 @@ const BX_CRONTAB = true;
 
 @set_time_limit(0);
 @ignore_user_abort(true);
-if($argc < 4){
-    exit();
-    //ToDo куда то нужно сообщать о том что sheduler вызван не верно
-}
-if(!Loader::includeModule($argv[1])) {
-    exit();
-    //ToDo куда то нужно сообщать о том что sheduler вызван не верно
-}
 Loader::includeModule("chelbit.bp");
-call_user_func($argv[2], $argv[3]);
+$executingParams = unserialize(base64_decode($argv[1]));
+//ToDo подумать куда и как сообщит о том, что дессериализация неуспешна
+Loader::includeModule($executingParams->getModuleName());
+if($executingParams->getCallType() === "static"){
+    $res = call_user_func($executingParams->getClassName()."::".$executingParams->getMethodName(),$executingParams->getParams());
+}else{
+    $obj = new $executingParams->getClassName();
+    call_user_func([$obj, $executingParams->getMethodName()], $executingParams->getParams());
+}

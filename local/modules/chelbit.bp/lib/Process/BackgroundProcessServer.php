@@ -1,77 +1,65 @@
 <?php
-namespace ChelBit\BP;
+namespace ChelBit\BP\Process;
 
 use Bitrix\Main\SystemException;
+use ChelBit\BP\Data\Process;
+use ChelBit\BP\Storage\Base;
+use ChelBit\BP\Storage\StatusFile;
 
 /**
  * Работает в фоновом методе и устаналивает параметры процесса
  */
 class BackgroundProcessServer extends BackgroundProcessBase
 {
-    private string $saveMode = "auto";
-    private ?string $pidKey;
+    private Process $processData;
+    private Base $storage;
+    private Logger $logger;
 
     /**
      * @throws SystemException
      */
     public function __construct(string $pidKey)
     {
-        if(!$this->getData($pidKey)){
-            throw new SystemException("Ошибка получения данных по процессу");
+        parent::__construct($pidKey);
+        if(!$this->hasProcess()){
+            throw new SystemException("PROCESS_NOT_EXIST");
         }
-        $this->pidKey = $pidKey;
+        $storage = new StatusFile($this->statusPath);
+        $this->processData = $storage->load();
+        $this->storage = $storage;
+        $this->logger = new Logger($pidKey);
     }
     /**
      * Сохранение состояние объекта в файл
      */
     public function save() : void
     {
-        $this->data["USED_MEMORY"] = $this->getUsedMemory();
-        $this->data["ALLOCATED_MEMORY"] = $this->getUsedMemory(true);
-        $this->data["UPDATE_DATE"] = date($this->dateFormat);
-        $this->setData($this->pidKey);
-    }
-
-    /**
-     * В этом случае метод save вызывается автоматичеси после вызова любого сеттера
-     * @return void
-     */
-    public function enableAutoSaveMode(): void
-    {
-        $this->saveMode = "auto";
-    }
-
-    /**
-     * В этом случае необходимо вручную вызыывать метод save после установки параметров data
-     * @return void
-     */
-    public function disableAutoSaveMode(): void
-    {
-        $this->saveMode = "manual";
+        $this->processData->addData("USED_MEMORY", $this->getUsedMemory());
+        $this->processData->addData("ALLOCATED_MEMORY", $this->getUsedMemory(true));
+        $this->processData->addData("UPDATE_DATE", date(Process::DATE_FORMAT, time()));
+        $this->storage->save($this->processData);
     }
 
     /**
      * Устанавливает общее количество элементов
      * @params int $totalItems
      */
-    public function setTotalItems(int $totalItems): void
+    public function setTotalItems(int $totalItems): self
     {
-        $this->data["TOTAL_ITEMS"] = $totalItems;
-        if($this->saveMode == "auto"){
-            $this->save();
-        }
+        $this->processData->addData("TOTAL_ITEMS", $totalItems);
+        $this->save();
+        return $this;
     }
 
     /**
      * Устанавливает количество обработанных элеентов
      * @param int $processedItems
      */
-    public function setProcessedItems(int $processedItems): void
+    public function setProcessedItems(int $processedItems): self
     {
-        $this->data["PROCESSED_ITEMS"] = $processedItems;
-        if($this->saveMode == "auto"){
-            $this->save();
-        }
+        $this->processData->addData("PROCESSED_ITEMS", $processedItems);
+        $this->save();
+        return $this;
     }
 
     /**
@@ -79,12 +67,11 @@ class BackgroundProcessServer extends BackgroundProcessBase
      * @param string $status
      * @return void
      */
-    public function setStatusDescription(string $status): void
+    public function setStatusDescription(string $status): self
     {
-        $this->data["STATUS_DESCRIPTION"] = $status;
-        if($this->saveMode == "auto"){
-            $this->save();
-        }
+        $this->processData->addData("STATUS_DESCRIPTION", $status);
+        $this->save();
+        return $this;
     }
 
     /**
@@ -93,16 +80,15 @@ class BackgroundProcessServer extends BackgroundProcessBase
      * @param bool $isJoin Добавить к предыдущему сообщению через пробел
      * @return void
      */
-    public function setWarning(string $warning, bool $isJoin = false): void
+    public function setWarning(string $warning, bool $isJoin = false): self
     {
         if($isJoin){
-            $this->data["WARNING"] = $this->data["WARNING"]." ".$warning;
-        }else{
-            $this->data["WARNING"] = $warning;
+            $this->processData->addData("WARNING", $this->processData->getDataByKey("WARNING")." ".$warning);
+        }else {
+            $this->processData->addData("WARNING", $warning);
         }
-        if($this->saveMode == "auto"){
-            $this->save();
-        }
+        $this->save();
+        return $this;
     }
     /**
      * Устанавливает статус успешного завершения, записывает в поле DATE_END текущее время
@@ -110,11 +96,12 @@ class BackgroundProcessServer extends BackgroundProcessBase
      * Предполагается, что после вызова данного метода с объектом работа окончена
      * @return void
      */
-    public function setCompletedStatus(): void
+    public function setCompletedStatus(): self
     {
-        $this->data["STATUS"] = "COMPLETED";
-        $this->data["END_DATE"] = date($this->dateFormat);
+        $this->processData->addData("STATUS", "COMPLETED");
+        $this->processData->addData("END_DATE", date(Process::DATE_FORMAT, time()));
         $this->save();
+        return $this;
     }
 
     /**
@@ -123,11 +110,16 @@ class BackgroundProcessServer extends BackgroundProcessBase
      *  Предполагается, что после вызова данного метода с объектом работа окончена
      * @return void
      */
-    public function setErrorStatus(): void
+    public function setErrorStatus(): self
     {
-        $this->data["STATUS"] = "ERROR";
-        $this->data["END_DATE"] = date($this->dateFormat);
+        $this->processData->addData("STATUS", "ERROR");
+        $this->processData->addData("END_DATE", date(Process::DATE_FORMAT, time()));
         $this->save();
+        return $this;
+    }
+    public function getLogger() : Logger
+    {
+        return $this->logger;
     }
     private function getUsedMemory($realUsage = false) : string
     {

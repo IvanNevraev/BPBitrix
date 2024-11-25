@@ -8,7 +8,7 @@ class Chelbit_Bp extends CModule
 {
 
     public $MODULE_ID = 'chelbit.bp';
-    public $MODULE_VERSION = "1.0.0";
+    public $MODULE_VERSION = "2.0.0";
     public $MODULE_VERSION_DATE = "2024-05-10 23:33:00";
     public $MODULE_NAME = "Фоновые процессы";
     public $MODULE_DESCRIPTION = "Модуль предназначени для запуска и отслеживания статуса фоновых процессов с использованием диалога пошагового процесса";
