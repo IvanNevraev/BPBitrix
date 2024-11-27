@@ -23,7 +23,7 @@ class StatusFile extends Base
     public function load(): \ChelBit\BP\Data\Base
     {
         $i = 0;
-        while ($i<100){
+        while ($i<1000){
             $i++;
             $content = file_get_contents($this->path);
             $data = unserialize($content);

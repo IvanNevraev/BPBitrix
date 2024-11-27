@@ -24,6 +24,7 @@ class BackgroundProcessClient extends BackgroundProcessBase
         array $params = []
     )
     {
+        sleep(0.5);
         parent::__construct($pidKey);
         if(!$this->hasProcess()){
             $executingParams = new ExecutingParams($moduleName,$className,$methodName, $pidKey, $callType, $params);
